@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Ad review | Nystrom Digital</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1b;--mute:#6b6a66;--line:#e4e2dc;--accent:#1f4d3a;--accent-ink:#fff;--warn:#9a3412;--ok:#166534}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1f1f1d;--ink:#f2f1ed;--mute:#a3a29c;--line:#34332f;--accent:#7fc4a2;--accent-ink:#0f1f17;--warn:#fca5a5;--ok:#86efac}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:20px 16px 8px;max-width:760px;margin:0 auto;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+header b{font-size:15px;letter-spacing:.02em}
+header span{color:var(--mute);font-size:14px}
+main{max-width:760px;margin:0 auto;padding:8px 16px 48px}
+h1{font-size:24px;margin:8px 0 4px}
+p.lead{color:var(--mute);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:0 0 18px}
+.card h2{font-size:18px;margin:0 0 6px}
+.notes{color:var(--mute);white-space:pre-wrap;margin:0 0 12px;font-size:15px}
+.files{display:grid;gap:14px}
+figure{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+figure img,figure video{display:block;width:100%;max-height:70vh;object-fit:contain;background:#000}
+figcaption{padding:10px 12px;font-size:14px;color:var(--mute)}
+label{display:block;font-size:14px;color:var(--mute);margin:10px 0 4px}
+input[type=text],textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+textarea{min-height:84px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button{font:inherit;font-weight:600;padding:12px 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;min-height:46px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.5;cursor:default}
+.msg{padding:12px 14px;border-radius:10px;margin:0 0 16px;border:1px solid var(--line);background:var(--card)}
+.msg.err{color:var(--warn)}
+.msg.ok{color:var(--ok)}
+.code{font-size:28px;letter-spacing:.3em;text-align:center;max-width:240px}
+.empty{text-align:center;color:var(--mute);padding:40px 16px}
+footer{max-width:760px;margin:0 auto;padding:0 16px 32px;color:var(--mute);font-size:13px;display:flex;justify-content:space-between}
+footer button{min-height:auto;padding:4px 8px;font-weight:400;font-size:13px;color:var(--mute);background:none;border:none;text-decoration:underline}
+</style>
+</head>
+<body>
+<header><b>Nystrom Digital</b><span id="who"></span></header>
+<main id="app"><p class="lead">Loading…</p></main>
+<footer><span>Questions? Reply to any email from Nicolas.</span><button id="out" hidden>Sign out</button></footer>
+<script>
+const API = 'https://mtrrwfxmbewibsqrgtgu.supabase.co/functions/v1/client-portal';
+const k = new URLSearchParams(location.search).get('k') || '';
+const store = { get(){ try { return localStorage.getItem('nd_s_' + k.slice(0, 12)) || ''; } catch { return ''; } }, set(v){ try { v ? localStorage.setItem('nd_s_' + k.slice(0, 12), v) : localStorage.removeItem('nd_s_' + k.slice(0, 12)); } catch {} } };
+let s = store.get(); let busy = false;
+const app = document.getElementById('app');
+const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+
+async function call(body) {
+  const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ k, s, ...body }) });
+  return r.json().catch(() => ({ state: 'error', error: 'No answer from the server.' }));
+}
+function show(res, note) {
+  app.replaceChildren();
+  document.getElementById('who').textContent = res.name ? res.name + (res.company ? ', ' + res.company : '') : '';
+  document.getElementById('out').hidden = res.state !== 'in';
+  if (res.session) { s = res.session; store.set(s); }
+  if (res.error) app.append(el('div', 'msg err', res.error));
+  if (note) app.append(el('div', 'msg ok', note));
+  if (res.state === 'bad_link') { app.append(el('h1', '', 'This link does not work')); app.append(el('p', 'lead', 'Ask Nicolas for a new review link.')); return; }
+  if (res.state === 'closed') { app.append(el('h1', '', 'Nothing to review here yet')); app.append(el('p', 'lead', 'Nicolas will let you know when this page is ready for you.')); return; }
+  if (res.state === 'error') { app.append(el('h1', '', 'Something went wrong')); app.append(el('p', 'lead', 'Try again in a minute.')); return; }
+  if (res.state === 'login') {
+    app.append(el('h1', '', 'Review your ads'), el('p', 'lead', 'We will email you a 6 digit code to open this page.'));
+    const b = el('button', 'primary', 'Email me a code'); b.onclick = () => run({ action: 'code' }); app.append(b); return;
+  }
+  if (res.state === 'code_sent') {
+    app.append(el('h1', '', 'Check your email'), el('p', 'lead', 'We sent a code' + (res.sent_to ? ' to ' + res.sent_to : '') + '. It works for 10 minutes.'));
+    const f = el('form'); const i = el('input', 'code'); i.type = 'text'; i.inputMode = 'numeric'; i.autocomplete = 'one-time-code'; i.maxLength = 6; i.setAttribute('aria-label', 'Code from the email');
+    const b = el('button', 'primary', 'Open'); const again = el('button', '', 'Send a new code'); again.type = 'button'; again.onclick = () => run({ action: 'code' });
+    const row = el('div', 'row'); row.append(b, again); f.append(i, row);
+    f.onsubmit = (e) => { e.preventDefault(); run({ action: 'verify', code: i.value }); };
+    app.append(f); i.focus(); return;
+  }
+  // signed in
+  const items = res.items || [];
+  app.append(el('h1', '', items.length ? 'Ready for your review' : 'All caught up'));
+  app.append(el('p', 'lead', items.length ? 'Approve each one, or tell us what to change. Nothing goes live before you approve.' : 'There is nothing waiting for you right now. We will email you when there is.'));
+  for (const j of items) app.append(card(j));
+}
+function card(j) {
+  const c = el('section', 'card'); c.append(el('h2', '', j.title));
+  if (j.notes) c.append(el('p', 'notes', j.notes));
+  const files = el('div', 'files'); const fileNotes = {};
+  for (const f of j.files) {
+    const fig = el('figure');
+    if (f.video) { const v = el('video'); v.controls = true; v.preload = 'metadata'; v.playsInline = true; if (f.preview) v.poster = f.preview; v.src = API + '?media=' + f.id + '&k=' + encodeURIComponent(k) + '&s=' + encodeURIComponent(s); fig.append(v); }
+    else if (f.preview) { const im = el('img'); im.src = f.preview; im.alt = f.name; im.loading = 'lazy'; fig.append(im); }
+    const cap = el('figcaption', '', f.name + (f.format ? ' · ' + f.format : ''));
+    const lab = el('label', '', 'Comment on this one (optional)'); const inp = el('input'); inp.type = 'text'; inp.oninput = () => { fileNotes[f.id] = inp.value; };
+    lab.append(inp); cap.append(lab); fig.append(cap); files.append(fig);
+  }
+  c.append(files);
+  const lab = el('label', '', 'Anything else? (needed if you ask for changes)'); const ta = el('textarea'); lab.append(ta); c.append(lab);
+  const row = el('div', 'row');
+  const ok = el('button', 'primary', 'Approve'); ok.onclick = () => run({ action: 'decide', job: j.id, decision: 'approve', note: ta.value, files: fileNotes }, 'Approved. Thank you.');
+  const no = el('button', '', 'Ask for changes'); no.onclick = () => run({ action: 'decide', job: j.id, decision: 'changes', note: ta.value, files: fileNotes }, 'Sent. We will make the changes and show you again.');
+  row.append(ok, no); c.append(row); return c;
+}
+async function run(body, okNote) {
+  if (busy) return; busy = true; for (const b of app.querySelectorAll('button')) b.disabled = true;
+  try { const res = await call(body); show(res, res.done ? okNote : null); }
+  catch { show({ state: 'error' }); }
+  finally { busy = false; }
+}
+document.getElementById('out').onclick = async () => { await call({ action: 'logout' }); s = ''; store.set(''); run({ action: 'items' }); };
+run({ action: 'items' });
+</script>
+</body>
+</html>
